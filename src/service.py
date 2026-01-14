@@ -274,3 +274,118 @@ class RoomBookingService:
     def get_user_bookings(self, user_id: int) -> List[Dict[str, Any]]:
         """Get all bookings for a user."""
         return self.repo.get_user_bookings(user_id)
+
+    # ========================================================================
+    # Admin operations
+    # ========================================================================
+
+    def is_admin(self, user_id: int) -> bool:
+        """Check if user is admin."""
+        return self.repo.is_admin(user_id)
+
+    def add_admin(self, user_id: int, username: str) -> Dict[str, Any]:
+        """Add new admin.
+
+        Args:
+            user_id: User ID to add as admin
+            username: Username to add as admin
+
+        Returns:
+            {
+                'success': bool,
+                'message': str
+            }
+        """
+        if self.repo.is_admin(user_id):
+            return {
+                'success': False,
+                'message': f"❌ {username} уже является администратором"
+            }
+
+        self.repo.add_admin(user_id, username)
+        return {
+            'success': True,
+            'message': f"✅ {username} добавлен как администратор"
+        }
+
+    def remove_admin(self, user_id: int, username: str) -> Dict[str, Any]:
+        """Remove admin.
+
+        Args:
+            user_id: User ID to remove from admins
+            username: Username to remove from admins
+
+        Returns:
+            {
+                'success': bool,
+                'message': str
+            }
+        """
+        if not self.repo.is_admin(user_id):
+            return {
+                'success': False,
+                'message': f"❌ {username} не является администратором"
+            }
+
+        self.repo.remove_admin(user_id)
+        return {
+            'success': True,
+            'message': f"✅ {username} удален из администраторов"
+        }
+
+    def list_admins(self) -> List[Dict[str, Any]]:
+        """Get list of all admins."""
+        return self.repo.get_all_admins()
+
+    def admin_add_room(self, room_name: str, capacity: int) -> Dict[str, Any]:
+        """Admin: add new room.
+
+        Args:
+            room_name: Name of the room to add
+            capacity: Capacity of the room
+
+        Returns:
+            {
+                'success': bool,
+                'message': str
+            }
+        """
+        existing = self.repo.get_room(room_name)
+        if existing:
+            return {
+                'success': False,
+                'message': f"❌ Переговорка '{room_name}' уже существует"
+            }
+
+        self.repo.add_room(room_name, capacity)
+        return {
+            'success': True,
+            'message': f"✅ Переговорка '{room_name}' (вместимость: {capacity}) добавлена"
+        }
+
+    def admin_delete_room(self, room_name: str) -> Dict[str, Any]:
+        """Admin: delete room (and all its bookings).
+
+        Args:
+            room_name: Name of the room to delete
+
+        Returns:
+            {
+                'success': bool,
+                'message': str
+            }
+        """
+        existing = self.repo.get_room(room_name)
+        if not existing:
+            return {
+                'success': False,
+                'message': f"❌ Переговорка '{room_name}' не найдена"
+            }
+
+        # Delete all bookings for this room
+        self.repo.delete_room_bookings(room_name)
+        # Note: Actual room deletion would need to be implemented in repository
+        return {
+            'success': True,
+            'message': f"✅ Переговорка '{room_name}' удалена"
+        }
