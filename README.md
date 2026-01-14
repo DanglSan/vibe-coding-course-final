@@ -1,6 +1,6 @@
 # Система бронирования переговорок
 
-Telegram бот для управления бронированием переговорок в офисе. Проект создан в рамках экзамена курса Vibe Coding 2025 (ITMO, магистратура ПИ).
+Telegram бот для управления бронированием переговорок в офисе. Проект создан в рамках экзамена курса Vibe Coding 2025 (ITMO, магистратура ИИ).
 
 ## Проблема
 
@@ -54,27 +54,69 @@ cd vibe-coding-course-final
 cp .env.example .env
 ```
 
-3. Отредактируйте `.env` и добавьте свои данные:
+3. Получите Telegram Bot Token:
+
+   a. Найдите [@BotFather](https://t.me/botfather) в Telegram
+
+   b. Отправьте команду `/newbot` и следуйте инструкциям:
+   - Придумайте имя для бота (например: "Room Booking Bot")
+   - Придумайте username (должен заканчиваться на `bot`, например: `my_room_booking_bot`)
+   - Скопируйте полученный token
+
+   c. Настройте команды бота в BotFather:
+
+   Отправьте `/setcommands` боту [@BotFather](https://t.me/botfather), выберите вашего бота, и вставьте следующий список команд:
+
+   ```
+   start - Показать справку и список команд
+   rooms - Список всех переговорок
+   available - Свободные переговорки сейчас
+   book - Забронировать переговорку (пример: /book Марс 15:00-16:00)
+   release - Освободить переговорку досрочно
+   status - Проверить кто занял переговорку
+   mybooks - Показать мои бронирования
+   admin_add_room - [Админ] Добавить переговорку
+   admin_delete_room - [Админ] Удалить переговорку
+   admin_add - [Админ] Добавить администратора
+   admin_remove - [Админ] Удалить администратора
+   admin_list - [Админ] Список администраторов
+   ```
+
+   d. Установите описание бота (опционально):
+
+   Отправьте `/setdescription` боту [@BotFather](https://t.me/botfather) и вставьте:
+   ```
+   Бот для бронирования переговорок в офисе. Проверяй доступность, бронируй на нужное время и освобождай досрочно.
+   ```
+
+4. Узнайте свой Telegram ID:
+
+   Напишите боту [@getmyid_bot](https://t.me/getmyid_bot), и он пришлет вам ваш ID.
+
+   Вы также можете использовать [@userinfobot](https://t.me/userinfobot).
+
+5. Отредактируйте `.env` и добавьте свои данные:
 ```bash
-TELEGRAM_BOT_TOKEN=your_bot_token_here
-ADMIN_USER_ID=123456789  # Ваш Telegram user ID
+TELEGRAM_BOT_TOKEN=1234567890:ABCdefGHIjklMNOpqrsTUVwxyz  # Токен от BotFather
+ADMIN_USER_ID=123456789  # Ваш Telegram ID от getmyid_bot
 ```
 
-Как узнать свой Telegram ID:
-- Напишите боту [@userinfobot](https://t.me/userinfobot)
-- Он отправит вам ваш ID
-
-4. Запустите с docker-compose:
+6. Запустите с docker-compose:
 ```bash
 docker-compose up -d
 ```
 
-5. Проверьте логи:
+7. Проверьте логи:
 ```bash
 docker-compose logs -f
 ```
 
-6. Остановить бота:
+Вы должны увидеть сообщение:
+```
+✅ Initialized admin: 123456789
+```
+
+8. Остановить бота:
 ```bash
 docker-compose down
 ```
@@ -98,28 +140,34 @@ pip install -r requirements.txt
 
 Требуется Python 3.11+
 
-### 3. Получение Telegram Bot Token
+### 3. Получение Telegram Bot Token и настройка
 
 1. Найдите [@BotFather](https://t.me/botfather) в Telegram
-2. Отправьте команду `/newbot`
-3. Следуйте инструкциям (придумайте имя и username для бота)
-4. Скопируйте полученный token
+2. Отправьте команду `/newbot` и следуйте инструкциям
+3. Скопируйте полученный token
+4. Настройте команды бота через `/setcommands` (см. инструкцию в "Вариант 1" выше)
 
-### 4. Настройка переменных окружения
+### 4. Узнайте свой Telegram ID
+
+Напишите боту [@getmyid_bot](https://t.me/getmyid_bot) для получения вашего ID.
+
+### 5. Настройка переменных окружения
 
 Создайте файл `.env`:
 
 ```bash
-TELEGRAM_BOT_TOKEN=your_bot_token_here
+TELEGRAM_BOT_TOKEN=1234567890:ABCdefGHIjklMNOpqrsTUVwxyz
+ADMIN_USER_ID=123456789
 ```
 
-Или экспортируйте переменную:
+Или экспортируйте переменные:
 
 ```bash
 export TELEGRAM_BOT_TOKEN=your_bot_token_here
+export ADMIN_USER_ID=your_telegram_id
 ```
 
-### 5. Инициализация данных (опционально)
+### 6. Инициализация данных (опционально)
 
 Создайте тестовые переговорки:
 
@@ -478,6 +526,6 @@ MIT
 
 ## Автор
 
-Создано для экзамена курса Vibe Coding 2025 (ITMO, магистратура ПИ)
+Создано для экзамена курса Vibe Coding 2025 (ITMO, магистратура ИИ)
 
 Co-Authored with Claude Code
