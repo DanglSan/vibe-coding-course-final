@@ -41,6 +41,9 @@ env/
 *.sqlite
 *.sqlite3
 
+# Docker volumes
+data/
+
 # Testing
 .pytest_cache/
 .coverage

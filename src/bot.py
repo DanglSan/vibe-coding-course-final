@@ -3,12 +3,16 @@ import os
 import re
 from datetime import datetime
 from typing import Optional
+from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.types import Message
 
 from .database import Database
 from .models import Room, Booking
+
+# Load environment variables
+load_dotenv()
 
 
 class RoomBookingBot:
@@ -265,7 +269,12 @@ def main():
     """Entry point for running the bot."""
     token = os.getenv("TELEGRAM_BOT_TOKEN")
     if not token:
-        raise ValueError("TELEGRAM_BOT_TOKEN environment variable is not set")
+        raise ValueError("TELEGRAM_BOT_TOKEN not set in .env")
+
+    # Read ADMIN_USER_ID for future admin features
+    admin_user_id = int(os.getenv("ADMIN_USER_ID", 0))
+    if admin_user_id:
+        print(f"Admin user ID configured: {admin_user_id}")
 
     bot = RoomBookingBot(token)
     import asyncio
