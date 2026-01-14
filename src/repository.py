@@ -99,6 +99,16 @@ class RoomRepository(ABC):
         """Get list of all admins."""
         pass
 
+    @abstractmethod
+    def set_setting(self, key: str, value: str) -> None:
+        """Set a configuration setting."""
+        pass
+
+    @abstractmethod
+    def get_setting(self, key: str, default: Optional[str] = None) -> Optional[str]:
+        """Get a configuration setting."""
+        pass
+
 
 class SQLiteRepository(RoomRepository):
     """SQLite implementation of room repository."""
@@ -168,6 +178,12 @@ class SQLiteRepository(RoomRepository):
     def get_all_admins(self) -> List[Dict[str, Any]]:
         return self.db.get_all_admins()
 
+    def set_setting(self, key: str, value: str) -> None:
+        self.db.set_setting(key, value)
+
+    def get_setting(self, key: str, default: Optional[str] = None) -> Optional[str]:
+        return self.db.get_setting(key, default)
+
 
 class InMemoryRepository(RoomRepository):
     """In-memory implementation of room repository for testing."""
@@ -177,6 +193,7 @@ class InMemoryRepository(RoomRepository):
         self.rooms: Dict[str, Dict[str, Any]] = {}
         self.bookings: Dict[int, Dict[str, Any]] = {}
         self.admins: Dict[int, Dict[str, Any]] = {}  # user_id -> admin details
+        self.settings: Dict[str, str] = {}  # key -> value
         self.next_room_id = 1
         self.next_booking_id = 1
 
@@ -317,3 +334,11 @@ class InMemoryRepository(RoomRepository):
     def get_all_admins(self) -> List[Dict[str, Any]]:
         """Get list of all admins."""
         return sorted(self.admins.values(), key=lambda a: a['added_at'])
+
+    def set_setting(self, key: str, value: str) -> None:
+        """Set a configuration setting."""
+        self.settings[key] = value
+
+    def get_setting(self, key: str, default: Optional[str] = None) -> Optional[str]:
+        """Get a configuration setting."""
+        return self.settings.get(key, default)

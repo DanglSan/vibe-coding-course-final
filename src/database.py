@@ -70,6 +70,15 @@ class Database:
                 )
             """)
 
+            # Settings table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS settings (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+            """)
+
     # ========================================================================
     # Rooms operations
     # ========================================================================
@@ -273,3 +282,36 @@ class Database:
                 "SELECT user_id, username, added_at FROM admins ORDER BY added_at"
             )
             return [dict(row) for row in cursor.fetchall()]
+
+    # ========================================================================
+    # Settings operations
+    # ========================================================================
+
+    def set_setting(self, key: str, value: str) -> None:
+        """Set a configuration setting."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """INSERT OR REPLACE INTO settings (key, value, updated_at)
+                   VALUES (?, ?, ?)""",
+                (key, value, datetime.now().isoformat())
+            )
+
+    def get_setting(self, key: str, default: Optional[str] = None) -> Optional[str]:
+        """Get a configuration setting.
+
+        Args:
+            key: Setting key
+            default: Default value if setting doesn't exist
+
+        Returns:
+            Setting value or default
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT value FROM settings WHERE key = ?",
+                (key,)
+            )
+            row = cursor.fetchone()
+            return dict(row)['value'] if row else default
