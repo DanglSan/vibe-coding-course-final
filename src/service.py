@@ -1,6 +1,6 @@
 """Business logic service for room booking."""
 import re
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict, Any
 from .repository import RoomRepository
 
@@ -11,6 +11,28 @@ class RoomBookingService:
     def __init__(self, repository: RoomRepository):
         """Initialize service with a repository."""
         self.repo = repository
+
+    # ========================================================================
+    # Timezone management
+    # ========================================================================
+
+    def get_timezone(self) -> timezone:
+        """Get configured timezone from settings.
+
+        Returns:
+            timezone object with configured offset (default: UTC+0)
+        """
+        offset_str = self.repo.get_setting('timezone_offset', '+0')
+        offset_hours = int(offset_str)
+        return timezone(timedelta(hours=offset_hours))
+
+    def now(self) -> datetime:
+        """Get current time in configured timezone.
+
+        Returns:
+            Timezone-aware datetime in configured timezone
+        """
+        return datetime.now(self.get_timezone())
 
     def _parse_time_range(self, time_range: str) -> tuple[datetime, datetime]:
         """Parse time range string to datetime objects.
@@ -32,11 +54,16 @@ class RoomBookingService:
         start_str = match.group(1)
         end_str = match.group(2)
 
-        # Convert to datetime
-        today = datetime.now().date()
+        # Convert to timezone-aware datetime
+        tz = self.get_timezone()
+        today = self.now().date()
         try:
-            start_time = datetime.strptime(f"{today} {start_str}", "%Y-%m-%d %H:%M")
-            end_time = datetime.strptime(f"{today} {end_str}", "%Y-%m-%d %H:%M")
+            # Parse as naive datetime first
+            start_naive = datetime.strptime(f"{today} {start_str}", "%Y-%m-%d %H:%M")
+            end_naive = datetime.strptime(f"{today} {end_str}", "%Y-%m-%d %H:%M")
+            # Make timezone-aware
+            start_time = start_naive.replace(tzinfo=tz)
+            end_time = end_naive.replace(tzinfo=tz)
         except ValueError as e:
             raise ValueError(f"Неверный формат времени: {e}")
 
@@ -59,7 +86,7 @@ class RoomBookingService:
             }
         """
         if current_time is None:
-            current_time = datetime.now()
+            current_time = self.now()
 
         current_time_str = current_time.isoformat()
         rooms = self.repo.get_all_rooms()
@@ -232,7 +259,7 @@ class RoomBookingService:
             }
         """
         if current_time is None:
-            current_time = datetime.now()
+            current_time = self.now()
 
         # Check if room exists
         room = self.repo.get_room(room_name)
@@ -274,6 +301,45 @@ class RoomBookingService:
     def get_user_bookings(self, user_id: int) -> List[Dict[str, Any]]:
         """Get all bookings for a user."""
         return self.repo.get_user_bookings(user_id)
+
+    # ========================================================================
+    # Timezone management
+    # ========================================================================
+
+    def set_timezone(self, offset: int) -> Dict[str, Any]:
+        """Admin: set timezone offset.
+
+        Args:
+            offset: Timezone offset in hours (-12 to +14)
+
+        Returns:
+            {'success': bool, 'message': str}
+        """
+        if not (-12 <= offset <= 14):
+            return {
+                'success': False,
+                'message': '❌ Смещение должно быть от -12 до +14 часов'
+            }
+
+        offset_str = f"{offset:+d}"  # "+3" or "-5"
+        self.repo.set_setting('timezone_offset', offset_str)
+
+        return {
+            'success': True,
+            'message': f'✅ Таймзона установлена: UTC{offset_str}'
+        }
+
+    def get_current_timezone(self) -> Dict[str, Any]:
+        """Get current timezone setting.
+
+        Returns:
+            {'offset': str, 'display': str}
+        """
+        offset_str = self.repo.get_setting('timezone_offset', '+0')
+        return {
+            'offset': offset_str,
+            'display': f'UTC{offset_str}'
+        }
 
     # ========================================================================
     # Admin operations
