@@ -61,6 +61,15 @@ class Database:
                 ON bookings (room_name, start_time, end_time)
             """)
 
+            # Admins table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS admins (
+                    user_id INTEGER PRIMARY KEY,
+                    username TEXT NOT NULL,
+                    added_at TEXT NOT NULL
+                )
+            """)
+
     # ========================================================================
     # Rooms operations
     # ========================================================================
@@ -228,3 +237,39 @@ class Database:
             )
             row = cursor.fetchone()
             return dict(row) if row else None
+
+    # ========================================================================
+    # Admins operations
+    # ========================================================================
+
+    def add_admin(self, user_id: int, username: str) -> None:
+        """Add user as admin."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """INSERT OR REPLACE INTO admins (user_id, username, added_at)
+                   VALUES (?, ?, ?)""",
+                (user_id, username, datetime.now().isoformat())
+            )
+
+    def remove_admin(self, user_id: int) -> None:
+        """Remove user from admins."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM admins WHERE user_id = ?", (user_id,))
+
+    def is_admin(self, user_id: int) -> bool:
+        """Check if user is admin."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT 1 FROM admins WHERE user_id = ?", (user_id,))
+            return cursor.fetchone() is not None
+
+    def get_all_admins(self) -> List[Dict[str, Any]]:
+        """Get list of all admins."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT user_id, username, added_at FROM admins ORDER BY added_at"
+            )
+            return [dict(row) for row in cursor.fetchall()]

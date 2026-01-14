@@ -271,12 +271,18 @@ def main():
     if not token:
         raise ValueError("TELEGRAM_BOT_TOKEN not set in .env")
 
-    # Read ADMIN_USER_ID for future admin features
+    # Read ADMIN_USER_ID for admin initialization
     admin_user_id = int(os.getenv("ADMIN_USER_ID", 0))
-    if admin_user_id:
-        print(f"Admin user ID configured: {admin_user_id}")
 
     bot = RoomBookingBot(token)
+
+    # Initialize first admin from .env
+    if admin_user_id and not bot.db.is_admin(admin_user_id):
+        bot.db.add_admin(admin_user_id, "Initial Admin (from .env)")
+        print(f"✅ Initialized admin: {admin_user_id}")
+    elif admin_user_id:
+        print(f"ℹ️  Admin {admin_user_id} already exists")
+
     import asyncio
     asyncio.run(bot.start())
 

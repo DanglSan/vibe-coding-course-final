@@ -79,6 +79,26 @@ class RoomRepository(ABC):
         """Check if there's a booking conflict for given time range."""
         pass
 
+    @abstractmethod
+    def add_admin(self, user_id: int, username: str) -> None:
+        """Add user as admin."""
+        pass
+
+    @abstractmethod
+    def remove_admin(self, user_id: int) -> None:
+        """Remove user from admins."""
+        pass
+
+    @abstractmethod
+    def is_admin(self, user_id: int) -> bool:
+        """Check if user is admin."""
+        pass
+
+    @abstractmethod
+    def get_all_admins(self) -> List[Dict[str, Any]]:
+        """Get list of all admins."""
+        pass
+
 
 class SQLiteRepository(RoomRepository):
     """SQLite implementation of room repository."""
@@ -136,6 +156,18 @@ class SQLiteRepository(RoomRepository):
     ) -> Optional[Dict[str, Any]]:
         return self.db.check_booking_conflict(room_name, start_time, end_time)
 
+    def add_admin(self, user_id: int, username: str) -> None:
+        self.db.add_admin(user_id, username)
+
+    def remove_admin(self, user_id: int) -> None:
+        self.db.remove_admin(user_id)
+
+    def is_admin(self, user_id: int) -> bool:
+        return self.db.is_admin(user_id)
+
+    def get_all_admins(self) -> List[Dict[str, Any]]:
+        return self.db.get_all_admins()
+
 
 class InMemoryRepository(RoomRepository):
     """In-memory implementation of room repository for testing."""
@@ -144,6 +176,7 @@ class InMemoryRepository(RoomRepository):
         """Initialize with empty in-memory storage."""
         self.rooms: Dict[str, Dict[str, Any]] = {}
         self.bookings: Dict[int, Dict[str, Any]] = {}
+        self.admins: Dict[int, Dict[str, Any]] = {}  # user_id -> admin details
         self.next_room_id = 1
         self.next_booking_id = 1
 
@@ -264,3 +297,23 @@ class InMemoryRepository(RoomRepository):
                 return booking
 
         return None
+
+    def add_admin(self, user_id: int, username: str) -> None:
+        """Add user as admin."""
+        self.admins[user_id] = {
+            'user_id': user_id,
+            'username': username,
+            'added_at': datetime.now().isoformat()
+        }
+
+    def remove_admin(self, user_id: int) -> None:
+        """Remove user from admins."""
+        self.admins.pop(user_id, None)
+
+    def is_admin(self, user_id: int) -> bool:
+        """Check if user is admin."""
+        return user_id in self.admins
+
+    def get_all_admins(self) -> List[Dict[str, Any]]:
+        """Get list of all admins."""
+        return sorted(self.admins.values(), key=lambda a: a['added_at'])
