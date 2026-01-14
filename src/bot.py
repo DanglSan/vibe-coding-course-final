@@ -10,6 +10,8 @@ from aiogram.types import Message
 
 from .database import Database
 from .models import Room, Booking
+from .repository import SQLiteRepository
+from .service import RoomBookingService
 
 # Load environment variables
 load_dotenv()
@@ -23,6 +25,10 @@ class RoomBookingBot:
         self.bot = Bot(token=token)
         self.dp = Dispatcher()
         self.db = Database(db_path)
+
+        # Initialize service layer for advanced features
+        self.repository = SQLiteRepository(db_path)
+        self.service = RoomBookingService(self.repository)
 
         # Register handlers
         self._register_handlers()
@@ -42,6 +48,7 @@ class RoomBookingBot:
         self.dp.message(Command("admin_add"))(self.cmd_admin_add)
         self.dp.message(Command("admin_remove"))(self.cmd_admin_remove)
         self.dp.message(Command("admin_list"))(self.cmd_admin_list)
+        self.dp.message(Command("admin_set_timezone"))(self.cmd_admin_set_timezone)
 
     async def cmd_start(self, message: Message):
         """Handle /start command."""
@@ -67,7 +74,8 @@ class RoomBookingBot:
                 "/admin_delete_room <название> - удалить переговорку\n"
                 "/admin_add - добавить админа (ответить на сообщение)\n"
                 "/admin_remove - удалить админа (ответить на сообщение)\n"
-                "/admin_list - список всех админов"
+                "/admin_list - список всех админов\n"
+                "/admin_set_timezone <offset> - установить таймзону офиса"
             )
 
         await message.answer(welcome_text)
@@ -401,6 +409,35 @@ class RoomBookingBot:
             lines.append(f"• {admin['username']} (ID: {admin['user_id']})")
 
         await message.answer("\n".join(lines))
+
+    async def cmd_admin_set_timezone(self, message: Message):
+        """Admin: set timezone - /admin_set_timezone <offset>"""
+        if not self._check_admin(message.from_user.id):
+            await message.answer("❌ Эта команда доступна только администраторам")
+            return
+
+        args = message.text.split(maxsplit=1)
+        if len(args) < 2:
+            # Show current timezone
+            tz_info = self.service.get_current_timezone()
+            await message.answer(
+                f"🌍 Текущая таймзона: {tz_info['display']}\n\n"
+                f"Использование: /admin_set_timezone <смещение>\n"
+                f"Примеры:\n"
+                f"  /admin_set_timezone +3  (Москва)\n"
+                f"  /admin_set_timezone +5  (Екатеринбург)\n"
+                f"  /admin_set_timezone -5  (Нью-Йорк)"
+            )
+            return
+
+        try:
+            offset = int(args[1])
+        except ValueError:
+            await message.answer("❌ Смещение должно быть числом (например: +3 или -5)")
+            return
+
+        result = self.service.set_timezone(offset)
+        await message.answer(result['message'])
 
     async def start(self):
         """Start the bot."""

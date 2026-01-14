@@ -99,13 +99,13 @@ vibe-coding-course-final/
 
 ### Этап 3: Эволюции проекта (завершено)
 
-**Файл**: `02-evolutions-plan.md`
+**Файлы**: `02-evolutions-plan.md`, `03-timezone-evolution-plan.md`
 
-**Статус**: ✅ Завершено (7 коммитов, 88 тестов проходят)
+**Статус**: ✅ Завершено (10 коммитов, 105 тестов проходят)
 
-**Цель**: Подготовить проект к production deployment с полным тестовым покрытием и административными функциями.
+**Цель**: Подготовить проект к production deployment с полным тестовым покрытием, административными функциями и поддержкой таймзон.
 
-#### Три основные эволюции:
+#### Четыре основные эволюции:
 
 **Evolution 1: Docker контейнеризация** ✅
 - Простое развертывание через `docker-compose up`
@@ -117,7 +117,6 @@ vibe-coding-course-final/
 - Unit тесты для Service Layer (31 тест: бизнес-логика, валидация, форматирование)
 - Unit тесты для Admin Service (15 тестов: авторизация, управление)
 - Integration тесты для Repository (14 тестов: реальный SQLite, персистентность)
-- **Total**: 88 тестов (10 BDD + 78 unit/integration)
 
 **Evolution 3: Административные команды** ✅
 - Таблица admins в БД с методами CRUD
@@ -129,9 +128,17 @@ vibe-coding-course-final/
   - `/admin_list` - список всех админов
 - Проверка прав доступа для всех admin команд
 - Инициализация первого админа из ADMIN_USER_ID в .env
-- Обновленная документация с примерами admin команд
 
-#### Git коммиты эволюций (7 коммитов):
+**Evolution 4: Timezone Management** ✅
+- Таблица `settings` для конфигурационных настроек
+- Методы `set_setting()` и `get_setting()` в Database и Repository layers
+- Timezone-aware datetime операции в Service Layer
+- Команда `/admin_set_timezone <offset>` для установки таймзоны офиса
+- Все бронирования используют настроенную таймзону (по умолчанию UTC+0)
+- 17 новых тестов (5 settings + 12 timezone)
+- Обновленная документация с примерами timezone setup
+
+#### Git коммиты эволюций (10 коммитов):
 1. ✅ Docker + .env infrastructure
 2. ✅ Unit tests for database layer (18 tests)
 3. ✅ Unit tests for service layer (31 tests)
@@ -139,10 +146,13 @@ vibe-coding-course-final/
 5. ✅ Admin table and repository methods
 6. ✅ Admin service layer methods with tests (15 tests)
 7. ✅ Admin bot commands and documentation
+8. ✅ Settings table for timezone infrastructure (5 tests)
+9. ✅ Timezone management in service layer (12 tests)
+10. ✅ Admin timezone command and documentation
 
-**Итоговое количество коммитов**: 16 (9 MVP + 7 эволюций)
+**Итоговое количество коммитов**: 19 (9 MVP + 10 эволюций)
 
-**Проверка эволюций**: `pytest -v` → 88 passed
+**Проверка эволюций**: `pytest -v` → 105 passed
 
 ## Подход к разработке
 
@@ -176,10 +186,11 @@ vibe-coding-course-final/
 
 **Эволюции (Этап 3)**:
 - [x] Docker + docker-compose для развертывания
-- [x] Unit + Integration тесты для всех слоев (88 тестов total)
-- [x] Административные команды в боте (5 команд)
+- [x] Unit + Integration тесты для всех слоев (105 тестов total)
+- [x] Административные команды в боте (6 команд, включая timezone)
+- [x] Timezone management для корректной работы с офисным временем
 - [x] Обновленная документация с инструкциями
-- [x] 16 коммитов total (9 MVP + 7 эволюций)
+- [x] 19 коммитов total (9 MVP + 10 эволюций)
 
 ## Реализованные BDD-сценарии
 
