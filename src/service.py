@@ -12,6 +12,39 @@ class RoomBookingService:
         """Initialize service with a repository."""
         self.repo = repository
 
+    def _parse_time_range(self, time_range: str) -> tuple[datetime, datetime]:
+        """Parse time range string to datetime objects.
+
+        Args:
+            time_range: Time range in format "HH:MM-HH:MM"
+
+        Returns:
+            Tuple of (start_time, end_time) as datetime objects
+
+        Raises:
+            ValueError: If time format is invalid
+        """
+        # Parse time range format
+        match = re.match(r'^(\d{1,2}:\d{2})-(\d{1,2}:\d{2})$', time_range)
+        if not match:
+            raise ValueError("Неверный формат времени. Используйте HH:MM-HH:MM")
+
+        start_str = match.group(1)
+        end_str = match.group(2)
+
+        # Convert to datetime
+        today = datetime.now().date()
+        try:
+            start_time = datetime.strptime(f"{today} {start_str}", "%Y-%m-%d %H:%M")
+            end_time = datetime.strptime(f"{today} {end_str}", "%Y-%m-%d %H:%M")
+        except ValueError as e:
+            raise ValueError(f"Неверный формат времени: {e}")
+
+        if start_time >= end_time:
+            raise ValueError("Время начала должно быть раньше времени окончания")
+
+        return start_time, end_time
+
     def list_all_rooms(self) -> List[Dict[str, Any]]:
         """Get list of all rooms."""
         return self.repo.get_all_rooms()
@@ -88,33 +121,12 @@ class RoomBookingService:
             }
 
         # Parse time range
-        match = re.match(r'^(\d{1,2}:\d{2})-(\d{1,2}:\d{2})$', time_range)
-        if not match:
-            return {
-                'success': False,
-                'message': "❌ Неверный формат времени. Используйте HH:MM-HH:MM",
-                'booking_id': None
-            }
-
-        start_str = match.group(1)
-        end_str = match.group(2)
-
-        # Convert to datetime
-        today = datetime.now().date()
         try:
-            start_time = datetime.strptime(f"{today} {start_str}", "%Y-%m-%d %H:%M")
-            end_time = datetime.strptime(f"{today} {end_str}", "%Y-%m-%d %H:%M")
-        except ValueError:
+            start_time, end_time = self._parse_time_range(time_range)
+        except ValueError as e:
             return {
                 'success': False,
-                'message': "❌ Неверный формат времени",
-                'booking_id': None
-            }
-
-        if start_time >= end_time:
-            return {
-                'success': False,
-                'message': "❌ Время начала должно быть раньше времени окончания",
+                'message': f"❌ {str(e)}",
                 'booking_id': None
             }
 
