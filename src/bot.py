@@ -1,15 +1,11 @@
 """Telegram bot for room booking system."""
 import os
-import re
 from datetime import datetime
-from typing import Optional
 from dotenv import load_dotenv
-from aiogram import Bot, Dispatcher, types
+from aiogram import Bot, Dispatcher
 from aiogram.filters import Command
 from aiogram.types import Message
 
-from .database import Database
-from .models import Room, Booking
 from .repository import SQLiteRepository
 from .service import RoomBookingService
 
@@ -24,9 +20,8 @@ class RoomBookingBot:
         """Initialize bot."""
         self.bot = Bot(token=token)
         self.dp = Dispatcher()
-        self.db = Database(db_path)
 
-        # Initialize service layer for advanced features
+        # Initialize service layer (single source of truth)
         self.repository = SQLiteRepository(db_path)
         self.service = RoomBookingService(self.repository)
 
@@ -53,7 +48,7 @@ class RoomBookingBot:
     async def cmd_start(self, message: Message):
         """Handle /start command."""
         user_id = message.from_user.id
-        is_admin = self.db.is_admin(user_id)
+        is_admin = self.service.is_admin(user_id)
 
         welcome_text = (
             "👋 Привет! Я помогу забронировать переговорку.\n\n"
@@ -82,7 +77,7 @@ class RoomBookingBot:
 
     async def cmd_rooms(self, message: Message):
         """Handle /rooms command - list all rooms."""
-        rooms = Room.get_all(self.db)
+        rooms = self.service.list_all_rooms()
 
         if not rooms:
             await message.answer("❌ Переговорки не найдены")
@@ -90,25 +85,22 @@ class RoomBookingBot:
 
         text = "📋 Все переговорки:\n\n"
         for room in rooms:
-            text += f"• {room.name} (вместимость: {room.capacity})\n"
+            text += f"• {room['name']} (вместимость: {room['capacity']})\n"
 
         await message.answer(text)
 
     async def cmd_available(self, message: Message):
         """Handle /available command - list available rooms."""
-        rooms = Room.get_all(self.db)
-        current_time = datetime.now()
+        result = self.service.list_available_rooms()
 
         available_rooms = []
         occupied_rooms = []
 
-        for room in rooms:
-            current_booking = room.get_current_booking(current_time)
-            if current_booking:
-                end_time = current_booking.get_end_time_formatted()
-                occupied_rooms.append(f"• {room.name} - занят до {end_time}")
-            else:
-                available_rooms.append(f"• {room.name} (вместимость: {room.capacity})")
+        for room in result['available']:
+            available_rooms.append(f"• {room['name']} (вместимость: {room['capacity']})")
+
+        for room_name, end_time in result['occupied'].items():
+            occupied_rooms.append(f"• {room_name} - занят до {end_time}")
 
         text = "🟢 Свободные переговорки:\n\n"
 
@@ -136,69 +128,28 @@ class RoomBookingBot:
             )
             return
 
-        # Parse room name and time
-        match = re.match(r'^(.+?)\s+(\d{1,2}:\d{2})-(\d{1,2}:\d{2})$', args[1])
-        if not match:
+        # Extract room name and time range
+        parts = args[1].rsplit(maxsplit=1)
+        if len(parts) < 2:
             await message.answer(
-                "❌ Неверный формат времени. Используйте:\n"
+                "❌ Неверный формат. Используйте:\n"
                 "/book <название> <время>\n"
                 "Пример: /book Марс 15:00-16:00"
             )
             return
 
-        room_name = match.group(1).strip()
-        start_time_str = match.group(2)
-        end_time_str = match.group(3)
+        room_name = parts[0].strip()
+        time_range = parts[1].strip()
 
-        # Check if room exists
-        room = Room.get(room_name, self.db)
-        if not room:
-            await message.answer(f"❌ Переговорка '{room_name}' не найдена")
-            return
-
-        # Convert time to ISO format
-        today = datetime.now().date()
-        try:
-            start_time = datetime.strptime(f"{today} {start_time_str}", "%Y-%m-%d %H:%M")
-            end_time = datetime.strptime(f"{today} {end_time_str}", "%Y-%m-%d %H:%M")
-        except ValueError:
-            await message.answer("❌ Неверный формат времени")
-            return
-
-        if start_time >= end_time:
-            await message.answer("❌ Время начала должно быть раньше времени окончания")
-            return
-
-        # Create booking
-        booking = Booking.create(
+        # Use service to book room (handles timezone, validation, conflicts)
+        result = self.service.book_room(
             room_name=room_name,
             user_id=message.from_user.id,
             username=message.from_user.full_name,
-            start_time=start_time.isoformat(),
-            end_time=end_time.isoformat(),
-            db=self.db
+            time_range=time_range
         )
 
-        if booking:
-            await message.answer(
-                f"✅ {room_name} забронирован на {start_time_str}-{end_time_str}"
-            )
-        else:
-            # Check what's the conflict
-            conflict = self.db.check_booking_conflict(
-                room_name,
-                start_time.isoformat(),
-                end_time.isoformat()
-            )
-            if conflict:
-                conflict_start = datetime.fromisoformat(conflict['start_time'])
-                conflict_end = datetime.fromisoformat(conflict['end_time'])
-                await message.answer(
-                    f"❌ {room_name} занят с {conflict_start.strftime('%H:%M')} "
-                    f"до {conflict_end.strftime('%H:%M')}"
-                )
-            else:
-                await message.answer(f"❌ Не удалось забронировать {room_name}")
+        await message.answer(result['message'])
 
     async def cmd_release(self, message: Message):
         """Handle /release command - release booking early."""
@@ -214,28 +165,9 @@ class RoomBookingBot:
 
         room_name = args[1].strip()
 
-        # Check if room exists
-        room = Room.get(room_name, self.db)
-        if not room:
-            await message.answer(f"❌ Переговорка '{room_name}' не найдена")
-            return
-
-        # Find user's booking for this room
-        booking = self.db.find_booking_by_room_and_user(
-            room_name,
-            message.from_user.id
-        )
-
-        if not booking:
-            await message.answer(f"❌ У вас нет активной брони для {room_name}")
-            return
-
-        # Delete booking
-        success = self.db.delete_booking(booking['id'])
-        if success:
-            await message.answer(f"✅ {room_name} освобожден")
-        else:
-            await message.answer(f"❌ Не удалось освободить {room_name}")
+        # Use service to release room
+        result = self.service.release_room(room_name, message.from_user.id)
+        await message.answer(result['message'])
 
     async def cmd_status(self, message: Message):
         """Handle /status command - check room status."""
@@ -251,26 +183,13 @@ class RoomBookingBot:
 
         room_name = args[1].strip()
 
-        # Check if room exists
-        room = Room.get(room_name, self.db)
-        if not room:
-            await message.answer(f"❌ Переговорка '{room_name}' не найдена")
-            return
-
-        # Check current booking
-        current_booking = room.get_current_booking(datetime.now())
-
-        if current_booking:
-            end_time = current_booking.get_end_time_formatted()
-            await message.answer(
-                f"{room_name}: {current_booking.username}, до {end_time}"
-            )
-        else:
-            await message.answer(f"{room_name} свободен")
+        # Use service to get room status (handles timezone)
+        result = self.service.get_room_status(room_name)
+        await message.answer(result['message'])
 
     async def cmd_mybooks(self, message: Message):
         """Handle /mybooks command - show user's bookings."""
-        bookings = Booking.get_user_bookings(message.from_user.id, self.db)
+        bookings = self.service.get_user_bookings(message.from_user.id)
 
         if not bookings:
             await message.answer("У вас нет активных бронирований")
@@ -278,10 +197,10 @@ class RoomBookingBot:
 
         text = "📅 Ваши бронирования:\n\n"
         for booking in bookings:
-            start = datetime.fromisoformat(booking.start_time)
-            end = datetime.fromisoformat(booking.end_time)
+            start = datetime.fromisoformat(booking['start_time'])
+            end = datetime.fromisoformat(booking['end_time'])
             text += (
-                f"• {booking.room_name}\n"
+                f"• {booking['room_name']}\n"
                 f"  {start.strftime('%d.%m.%Y %H:%M')} - "
                 f"{end.strftime('%H:%M')}\n\n"
             )
@@ -294,7 +213,7 @@ class RoomBookingBot:
 
     def _check_admin(self, user_id: int) -> bool:
         """Check if user is admin."""
-        return self.db.is_admin(user_id)
+        return self.service.is_admin(user_id)
 
     async def cmd_admin_add_room(self, message: Message):
         """Admin: add new room - /admin_add_room <name> <capacity>"""
@@ -314,14 +233,8 @@ class RoomBookingBot:
             await message.answer("❌ Вместимость должна быть числом")
             return
 
-        # Check if room already exists
-        existing = self.db.get_room(room_name)
-        if existing:
-            await message.answer(f"❌ Переговорка '{room_name}' уже существует")
-            return
-
-        self.db.add_room(room_name, capacity)
-        await message.answer(f"✅ Переговорка '{room_name}' (вместимость: {capacity}) добавлена")
+        result = self.service.admin_add_room(room_name, capacity)
+        await message.answer(result['message'])
 
     async def cmd_admin_delete_room(self, message: Message):
         """Admin: delete room - /admin_delete_room <name>"""
@@ -335,19 +248,8 @@ class RoomBookingBot:
             return
 
         room_name = args[1]
-
-        # Check if room exists
-        existing = self.db.get_room(room_name)
-        if not existing:
-            await message.answer(f"❌ Переговорка '{room_name}' не найдена")
-            return
-
-        # Delete all bookings for this room
-        deleted_count = self.db.delete_room_bookings(room_name)
-        await message.answer(
-            f"✅ Переговорка '{room_name}' удалена "
-            f"(удалено бронирований: {deleted_count})"
-        )
+        result = self.service.admin_delete_room(room_name)
+        await message.answer(result['message'])
 
     async def cmd_admin_add(self, message: Message):
         """Admin: add new admin - reply to user's message"""
@@ -364,12 +266,8 @@ class RoomBookingBot:
         user_id = message.reply_to_message.from_user.id
         username = message.reply_to_message.from_user.full_name
 
-        if self.db.is_admin(user_id):
-            await message.answer(f"❌ {username} уже является администратором")
-            return
-
-        self.db.add_admin(user_id, username)
-        await message.answer(f"✅ {username} добавлен как администратор")
+        result = self.service.add_admin(user_id, username)
+        await message.answer(result['message'])
 
     async def cmd_admin_remove(self, message: Message):
         """Admin: remove admin - reply to user's message"""
@@ -386,12 +284,8 @@ class RoomBookingBot:
         user_id = message.reply_to_message.from_user.id
         username = message.reply_to_message.from_user.full_name
 
-        if not self.db.is_admin(user_id):
-            await message.answer(f"❌ {username} не является администратором")
-            return
-
-        self.db.remove_admin(user_id)
-        await message.answer(f"✅ {username} удален из администраторов")
+        result = self.service.remove_admin(user_id, username)
+        await message.answer(result['message'])
 
     async def cmd_admin_list(self, message: Message):
         """Admin: list all admins"""
@@ -399,7 +293,7 @@ class RoomBookingBot:
             await message.answer("❌ Эта команда доступна только администраторам")
             return
 
-        admins = self.db.get_all_admins()
+        admins = self.service.list_admins()
         if not admins:
             await message.answer("📋 Нет администраторов")
             return
@@ -456,8 +350,8 @@ def main():
     bot = RoomBookingBot(token)
 
     # Initialize first admin from .env
-    if admin_user_id and not bot.db.is_admin(admin_user_id):
-        bot.db.add_admin(admin_user_id, "Initial Admin (from .env)")
+    if admin_user_id and not bot.service.is_admin(admin_user_id):
+        bot.service.add_admin(admin_user_id, "Initial Admin (from .env)")
         print(f"✅ Initialized admin: {admin_user_id}")
     elif admin_user_id:
         print(f"ℹ️  Admin {admin_user_id} already exists")

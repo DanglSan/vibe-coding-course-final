@@ -99,13 +99,13 @@ vibe-coding-course-final/
 
 ### Этап 3: Эволюции проекта (завершено)
 
-**Файлы**: `02-evolutions-plan.md`, `03-timezone-evolution-plan.md`
+**Файлы**: `02-evolutions-plan.md`, `03-timezone-evolution-plan.md`, `04-service-layer-refactoring-plan.md`
 
-**Статус**: ✅ Завершено (10 коммитов, 105 тестов проходят)
+**Статус**: ✅ Завершено (11 коммитов, 105 тестов проходят)
 
-**Цель**: Подготовить проект к production deployment с полным тестовым покрытием, административными функциями и поддержкой таймзон.
+**Цель**: Подготовить проект к production deployment с полным тестовым покрытием, административными функциями, поддержкой таймзон и корректной архитектурой.
 
-#### Четыре основные эволюции:
+#### Пять основных эволюций:
 
 **Evolution 1: Docker контейнеризация** ✅
 - Простое развертывание через `docker-compose up`
@@ -138,7 +138,15 @@ vibe-coding-course-final/
 - 17 новых тестов (5 settings + 12 timezone)
 - Обновленная документация с примерами timezone setup
 
-#### Git коммиты эволюций (10 коммитов):
+**Evolution 5: Service Layer Refactoring** ✅
+- Исправлен архитектурный баг: бот обходил Service Layer
+- Убран прямой доступ к БД (`self.db`) из бота
+- Все команды переведены на `self.service.*` методы
+- Исправлен баг с таймзоной в `/available`, `/book`, `/status`
+- Код сократился с ~466 до ~365 строк
+- Единая точка входа для бизнес-логики
+
+#### Git коммиты эволюций (11 коммитов):
 1. ✅ Docker + .env infrastructure
 2. ✅ Unit tests for database layer (18 tests)
 3. ✅ Unit tests for service layer (31 tests)
@@ -149,8 +157,9 @@ vibe-coding-course-final/
 8. ✅ Settings table for timezone infrastructure (5 tests)
 9. ✅ Timezone management in service layer (12 tests)
 10. ✅ Admin timezone command and documentation
+11. ✅ Refactor bot to use Service Layer exclusively
 
-**Итоговое количество коммитов**: 19 (9 MVP + 10 эволюций)
+**Итоговое количество коммитов**: 20 (9 MVP + 11 эволюций)
 
 **Проверка эволюций**: `pytest -v` → 105 passed
 
@@ -189,8 +198,9 @@ vibe-coding-course-final/
 - [x] Unit + Integration тесты для всех слоев (105 тестов total)
 - [x] Административные команды в боте (6 команд, включая timezone)
 - [x] Timezone management для корректной работы с офисным временем
+- [x] Service Layer refactoring (исправлен архитектурный баг)
 - [x] Обновленная документация с инструкциями
-- [x] 19 коммитов total (9 MVP + 10 эволюций)
+- [x] 20 коммитов total (9 MVP + 11 эволюций)
 
 ## Реализованные BDD-сценарии
 
