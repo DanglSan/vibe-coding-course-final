@@ -36,9 +36,18 @@ class RoomBookingBot:
         self.dp.message(Command("release"))(self.cmd_release)
         self.dp.message(Command("status"))(self.cmd_status)
         self.dp.message(Command("mybooks"))(self.cmd_mybooks)
+        # Admin commands
+        self.dp.message(Command("admin_add_room"))(self.cmd_admin_add_room)
+        self.dp.message(Command("admin_delete_room"))(self.cmd_admin_delete_room)
+        self.dp.message(Command("admin_add"))(self.cmd_admin_add)
+        self.dp.message(Command("admin_remove"))(self.cmd_admin_remove)
+        self.dp.message(Command("admin_list"))(self.cmd_admin_list)
 
     async def cmd_start(self, message: Message):
         """Handle /start command."""
+        user_id = message.from_user.id
+        is_admin = self.db.is_admin(user_id)
+
         welcome_text = (
             "👋 Привет! Я помогу забронировать переговорку.\n\n"
             "Доступные команды:\n"
@@ -50,6 +59,17 @@ class RoomBookingBot:
             "/status <название> - кто занял переговорку\n"
             "/mybooks - мои бронирования"
         )
+
+        if is_admin:
+            welcome_text += (
+                "\n\n👑 Команды администратора:\n"
+                "/admin_add_room <название> <вместимость> - добавить переговорку\n"
+                "/admin_delete_room <название> - удалить переговорку\n"
+                "/admin_add - добавить админа (ответить на сообщение)\n"
+                "/admin_remove - удалить админа (ответить на сообщение)\n"
+                "/admin_list - список всех админов"
+            )
+
         await message.answer(welcome_text)
 
     async def cmd_rooms(self, message: Message):
@@ -259,6 +279,128 @@ class RoomBookingBot:
             )
 
         await message.answer(text)
+
+    # ========================================================================
+    # Admin commands
+    # ========================================================================
+
+    def _check_admin(self, user_id: int) -> bool:
+        """Check if user is admin."""
+        return self.db.is_admin(user_id)
+
+    async def cmd_admin_add_room(self, message: Message):
+        """Admin: add new room - /admin_add_room <name> <capacity>"""
+        if not self._check_admin(message.from_user.id):
+            await message.answer("❌ Эта команда доступна только администраторам")
+            return
+
+        args = message.text.split(maxsplit=2)
+        if len(args) < 3:
+            await message.answer("❌ Использование: /admin_add_room <название> <вместимость>")
+            return
+
+        room_name = args[1]
+        try:
+            capacity = int(args[2])
+        except ValueError:
+            await message.answer("❌ Вместимость должна быть числом")
+            return
+
+        # Check if room already exists
+        existing = self.db.get_room(room_name)
+        if existing:
+            await message.answer(f"❌ Переговорка '{room_name}' уже существует")
+            return
+
+        self.db.add_room(room_name, capacity)
+        await message.answer(f"✅ Переговорка '{room_name}' (вместимость: {capacity}) добавлена")
+
+    async def cmd_admin_delete_room(self, message: Message):
+        """Admin: delete room - /admin_delete_room <name>"""
+        if not self._check_admin(message.from_user.id):
+            await message.answer("❌ Эта команда доступна только администраторам")
+            return
+
+        args = message.text.split(maxsplit=1)
+        if len(args) < 2:
+            await message.answer("❌ Использование: /admin_delete_room <название>")
+            return
+
+        room_name = args[1]
+
+        # Check if room exists
+        existing = self.db.get_room(room_name)
+        if not existing:
+            await message.answer(f"❌ Переговорка '{room_name}' не найдена")
+            return
+
+        # Delete all bookings for this room
+        deleted_count = self.db.delete_room_bookings(room_name)
+        await message.answer(
+            f"✅ Переговорка '{room_name}' удалена "
+            f"(удалено бронирований: {deleted_count})"
+        )
+
+    async def cmd_admin_add(self, message: Message):
+        """Admin: add new admin - reply to user's message"""
+        if not self._check_admin(message.from_user.id):
+            await message.answer("❌ Эта команда доступна только администраторам")
+            return
+
+        if not message.reply_to_message:
+            await message.answer(
+                "❌ Ответьте на сообщение пользователя, которого хотите сделать админом"
+            )
+            return
+
+        user_id = message.reply_to_message.from_user.id
+        username = message.reply_to_message.from_user.full_name
+
+        if self.db.is_admin(user_id):
+            await message.answer(f"❌ {username} уже является администратором")
+            return
+
+        self.db.add_admin(user_id, username)
+        await message.answer(f"✅ {username} добавлен как администратор")
+
+    async def cmd_admin_remove(self, message: Message):
+        """Admin: remove admin - reply to user's message"""
+        if not self._check_admin(message.from_user.id):
+            await message.answer("❌ Эта команда доступна только администраторам")
+            return
+
+        if not message.reply_to_message:
+            await message.answer(
+                "❌ Ответьте на сообщение администратора, которого хотите удалить"
+            )
+            return
+
+        user_id = message.reply_to_message.from_user.id
+        username = message.reply_to_message.from_user.full_name
+
+        if not self.db.is_admin(user_id):
+            await message.answer(f"❌ {username} не является администратором")
+            return
+
+        self.db.remove_admin(user_id)
+        await message.answer(f"✅ {username} удален из администраторов")
+
+    async def cmd_admin_list(self, message: Message):
+        """Admin: list all admins"""
+        if not self._check_admin(message.from_user.id):
+            await message.answer("❌ Эта команда доступна только администраторам")
+            return
+
+        admins = self.db.get_all_admins()
+        if not admins:
+            await message.answer("📋 Нет администраторов")
+            return
+
+        lines = ["👥 Администраторы:\n"]
+        for admin in admins:
+            lines.append(f"• {admin['username']} (ID: {admin['user_id']})")
+
+        await message.answer("\n".join(lines))
 
     async def start(self):
         """Start the bot."""
